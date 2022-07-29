@@ -27,6 +27,7 @@ struct IGraphicsPlugin {
     virtual int64_t SelectColorSwapchainFormat(const std::vector<int64_t>& runtimeFormats) const = 0;
 
     // Get the graphics binding header for session creation.
+    // 返回XrSessionCreateInfo需要使用的next字段指，这个指是一个graphics API binding structure指针
     virtual const XrBaseInStructure* GetGraphicsBinding() const = 0;
 
     // Allocate space for the swapchain image structures. These are different for each graphics API. The returned

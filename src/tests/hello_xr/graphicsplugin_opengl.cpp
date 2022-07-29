@@ -325,13 +325,17 @@ struct OpenGLGraphicsPlugin : public IGraphicsPlugin {
 
         const auto& pose = layerView.pose;
         XrMatrix4x4f proj;
+        // 基于fov创建一个矩阵proj
         XrMatrix4x4f_CreateProjectionFov(&proj, GRAPHICS_OPENGL, layerView.fov, 0.05f, 100.0f);
         XrMatrix4x4f toView;
         XrVector3f scale{1.f, 1.f, 1.f};
+        // 把View姿态里面的旋转、平移矩阵统一为矩阵toView
         XrMatrix4x4f_CreateTranslationRotationScale(&toView, &pose.position, &pose.orientation, &scale);
         XrMatrix4x4f view;
+        // 把矩阵toView转置赋值给view
         XrMatrix4x4f_InvertRigidBody(&view, &toView);
         XrMatrix4x4f vp;
+        // 把proj矩阵和toView矩阵统一为vp
         XrMatrix4x4f_Multiply(&vp, &proj, &view);
 
         // Set cube primitive data.
@@ -341,12 +345,15 @@ struct OpenGLGraphicsPlugin : public IGraphicsPlugin {
         for (const Cube& cube : cubes) {
             // Compute the model-view-projection transform and set it..
             XrMatrix4x4f model;
+            // 把方块的缩放、旋转、位置矩阵统一为model
             XrMatrix4x4f_CreateTranslationRotationScale(&model, &cube.Pose.position, &cube.Pose.orientation, &cube.Scale);
             XrMatrix4x4f mvp;
+            // 把模型和视图矩阵计算为mvp
             XrMatrix4x4f_Multiply(&mvp, &vp, &model);
             glUniformMatrix4fv(m_modelViewProjectionUniformLocation, 1, GL_FALSE, reinterpret_cast<const GLfloat*>(&mvp));
 
             // Draw the cube.
+            // 绘制方块
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(ArraySize(Geometry::c_cubeIndices)), GL_UNSIGNED_SHORT, nullptr);
         }
 

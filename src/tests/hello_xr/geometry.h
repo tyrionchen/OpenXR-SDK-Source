@@ -19,6 +19,7 @@ constexpr XrVector3f Blue{0, 0, 1};
 constexpr XrVector3f DarkBlue{0, 0, 0.25f};
 
 // Vertices for a 1x1x1 meter cube. (Left/Right, Top/Bottom, Front/Back)
+// 1x1x1米方块的顶点, 字母分别表示: 左/右, 上/下, 前/后
 constexpr XrVector3f LBB{-0.5f, -0.5f, -0.5f};
 constexpr XrVector3f LBF{-0.5f, -0.5f, 0.5f};
 constexpr XrVector3f LTB{-0.5f, 0.5f, -0.5f};
@@ -30,16 +31,21 @@ constexpr XrVector3f RTF{0.5f, 0.5f, 0.5f};
 
 #define CUBE_SIDE(V1, V2, V3, V4, V5, V6, COLOR) {V1, COLOR}, {V2, COLOR}, {V3, COLOR}, {V4, COLOR}, {V5, COLOR}, {V6, COLOR},
 
+// 用Vertex的一维数组描述一个每面颜色不同的一个立方体:
+// 这里如何描述一个面呢? 这里用了6个顶点
+// 为什么用六个顶点呢? 因为想用两个三角形描述这个矩形的面
+// 为什么用三角形描述呢? 这和图形API绘制方式有关
 constexpr Vertex c_cubeVertices[] = {
-    CUBE_SIDE(LTB, LBF, LBB, LTB, LTF, LBF, DarkRed)    // -X
-    CUBE_SIDE(RTB, RBB, RBF, RTB, RBF, RTF, Red)        // +X
-    CUBE_SIDE(LBB, LBF, RBF, LBB, RBF, RBB, DarkGreen)  // -Y
-    CUBE_SIDE(LTB, RTB, RTF, LTB, RTF, LTF, Green)      // +Y
-    CUBE_SIDE(LBB, RBB, RTB, LBB, RTB, LTB, DarkBlue)   // -Z
-    CUBE_SIDE(LBF, LTF, RTF, LBF, RTF, RBF, Blue)       // +Z
+    CUBE_SIDE(LTB, LBF, LBB, LTB, LTF, LBF, DarkRed)    // -X, 立方体左面深红色
+    CUBE_SIDE(RTB, RBB, RBF, RTB, RBF, RTF, Red)        // +X, 立方体右面红色
+    CUBE_SIDE(LBB, LBF, RBF, LBB, RBF, RBB, DarkGreen)  // -Y, 立方体底面深绿色
+    CUBE_SIDE(LTB, RTB, RTF, LTB, RTF, LTF, Green)      // +Y, 立方体顶部绿色
+    CUBE_SIDE(LBB, RBB, RTB, LBB, RTB, LTB, DarkBlue)   // -Z, 立方体后面深蓝色
+    CUBE_SIDE(LBF, LTF, RTF, LBF, RTF, RBF, Blue)       // +Z, 立方体前面蓝色
 };
 
 // Winding order is clockwise. Each side uses a different color.
+// 前面这个c_cubeVertices立方体的绘制顺序，由于顶点Vertex数组已经考虑了绘制顺序了，所以这个地方直接就从0写到了35
 constexpr unsigned short c_cubeIndices[] = {
     0,  1,  2,  3,  4,  5,   // -X
     6,  7,  8,  9,  10, 11,  // +X
