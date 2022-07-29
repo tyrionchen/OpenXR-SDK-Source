@@ -184,6 +184,7 @@ struct OpenXrProgram : IOpenXrProgram {
         std::vector<const char*> extensions;
 
         // Transform platform and graphics extension std::strings to C strings.
+        // 把std::strings表示的platform和graphics扩展转成c字符串
         const std::vector<std::string> platformExtensions = m_platformPlugin->GetInstanceExtensions();
         std::transform(platformExtensions.begin(), platformExtensions.end(), std::back_inserter(extensions),
                        [](const std::string& ext) { return ext.c_str(); });
@@ -586,9 +587,11 @@ struct OpenXrProgram : IOpenXrProgram {
 
         // Query and cache view configuration views.
         uint32_t viewCount;
+        // 查询XrViewConfigurationView数量
         CHECK_XRCMD(
             xrEnumerateViewConfigurationViews(m_instance, m_systemId, m_options.Parsed.ViewConfigType, 0, &viewCount, nullptr));
         m_configViews.resize(viewCount, {XR_TYPE_VIEW_CONFIGURATION_VIEW});
+        // 拿到XrViewConfigurationView
         CHECK_XRCMD(xrEnumerateViewConfigurationViews(m_instance, m_systemId, m_options.Parsed.ViewConfigType, viewCount,
                                                       &viewCount, m_configViews.data()));
 
@@ -599,11 +602,14 @@ struct OpenXrProgram : IOpenXrProgram {
         if (viewCount > 0) {
             // Select a swapchain format.
             uint32_t swapchainFormatCount;
+            // 查询swap chain格式的数量
             CHECK_XRCMD(xrEnumerateSwapchainFormats(m_session, 0, &swapchainFormatCount, nullptr));
             std::vector<int64_t> swapchainFormats(swapchainFormatCount);
+            // 获取所有支持的swap chain格式
             CHECK_XRCMD(xrEnumerateSwapchainFormats(m_session, (uint32_t)swapchainFormats.size(), &swapchainFormatCount,
                                                     swapchainFormats.data()));
             CHECK(swapchainFormatCount == swapchainFormats.size());
+            // 选择要使用的swap chain格式
             m_colorSwapchainFormat = m_graphicsPlugin->SelectColorSwapchainFormat(swapchainFormats);
 
             // Print swapchain formats and the selected one.
@@ -624,6 +630,7 @@ struct OpenXrProgram : IOpenXrProgram {
             }
 
             // Create a swapchain for each view.
+            // 针对每个View配置创建一个swap chain
             for (uint32_t i = 0; i < viewCount; i++) {
                 const XrViewConfigurationView& vp = m_configViews[i];
                 Log::Write(Log::Level::Info,
@@ -693,12 +700,12 @@ struct OpenXrProgram : IOpenXrProgram {
                     *requestRestart = true;
                     return;
                 }
-                case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
+                case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: { // 会话状态变化
                     auto sessionStateChangedEvent = *reinterpret_cast<const XrEventDataSessionStateChanged*>(event);
                     HandleSessionStateChangedEvent(sessionStateChangedEvent, exitRenderLoop, requestRestart);
                     break;
                 }
-                case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED:
+                case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: // 交互配置文件变更
                     LogActionSourceName(m_input.grabAction, "Grab");
                     LogActionSourceName(m_input.quitAction, "Quit");
                     LogActionSourceName(m_input.poseAction, "Pose");
@@ -727,7 +734,7 @@ struct OpenXrProgram : IOpenXrProgram {
         }
 
         switch (m_sessionState) {
-            case XR_SESSION_STATE_READY: {
+            case XR_SESSION_STATE_READY: { // The application is ready to call xrBeginSession and sync its frame loop with the runtime
                 CHECK(m_session != XR_NULL_HANDLE);
                 XrSessionBeginInfo sessionBeginInfo{XR_TYPE_SESSION_BEGIN_INFO};
                 sessionBeginInfo.primaryViewConfigurationType = m_options.Parsed.ViewConfigType;
@@ -798,7 +805,6 @@ struct OpenXrProgram : IOpenXrProgram {
     bool IsSessionRunning() const override { return m_sessionRunning; }
 
     bool IsSessionFocused() const override { return m_sessionState == XR_SESSION_STATE_FOCUSED; }
-
     void PollActions() override {
         m_input.handActive = {XR_FALSE, XR_FALSE};
 
@@ -852,10 +858,12 @@ struct OpenXrProgram : IOpenXrProgram {
         CHECK(m_session != XR_NULL_HANDLE);
 
         XrFrameWaitInfo frameWaitInfo{XR_TYPE_FRAME_WAIT_INFO};
+        // 描述下一帧需要被显示的时间
         XrFrameState frameState{XR_TYPE_FRAME_STATE};
         CHECK_XRCMD(xrWaitFrame(m_session, &frameWaitInfo, &frameState));
 
         XrFrameBeginInfo frameBeginInfo{XR_TYPE_FRAME_BEGIN_INFO};
+        // 开始绘制一帧
         CHECK_XRCMD(xrBeginFrame(m_session, &frameBeginInfo));
 
         std::vector<XrCompositionLayerBaseHeader*> layers;
@@ -872,6 +880,8 @@ struct OpenXrProgram : IOpenXrProgram {
         frameEndInfo.environmentBlendMode = m_options.Parsed.EnvironmentBlendMode;
         frameEndInfo.layerCount = (uint32_t)layers.size();
         frameEndInfo.layers = layers.data();
+        
+        // 结束一帧的绘制
         CHECK_XRCMD(xrEndFrame(m_session, &frameEndInfo));
     }
 
@@ -888,6 +898,8 @@ struct OpenXrProgram : IOpenXrProgram {
         viewLocateInfo.displayTime = predictedDisplayTime;
         viewLocateInfo.space = m_appSpace;
 
+        // xrLocateViews函数能够获取到predictedDisplayTime这个时间的View和投影信息
+        // xrLocateViews返回一个XrView元素的数组, XrView包含View姿态和投影状态，这个投影状态用于渲染一个视图配置里面的投影视图 
         res = xrLocateViews(m_session, &viewLocateInfo, &viewState, viewCapacityInput, &viewCountOutput, m_views.data());
         CHECK_XRRESULT(res, "xrLocateViews");
         if ((viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) == 0 ||
@@ -906,6 +918,7 @@ struct OpenXrProgram : IOpenXrProgram {
 
         for (XrSpace visualizedSpace : m_visualizedSpaces) {
             XrSpaceLocation spaceLocation{XR_TYPE_SPACE_LOCATION};
+            // 获取predictedDisplayTime这个时间m_appSpace空间里面visualizedSpace空间的位置spaceLocation
             res = xrLocateSpace(visualizedSpace, m_appSpace, predictedDisplayTime, &spaceLocation);
             CHECK_XRRESULT(res, "xrLocateSpace");
             if (XR_UNQUALIFIED_SUCCESS(res)) {
@@ -942,6 +955,7 @@ struct OpenXrProgram : IOpenXrProgram {
         }
 
         // Render view to the appropriate part of the swapchain image.
+        // 将画面渲染到Swapchain的图片里面
         for (uint32_t i = 0; i < viewCountOutput; i++) {
             // Each view has a separate swapchain which is acquired, rendered to, and released.
             const Swapchain viewSwapchain = m_swapchains[i];

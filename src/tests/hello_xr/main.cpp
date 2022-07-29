@@ -240,7 +240,7 @@ void android_main(struct android_app* app) {
         program->InitializeSystem();
         program->InitializeSession();
         program->CreateSwapchains();
-
+ 
         while (app->destroyRequested == 0) {
             // Read all pending events.
             for (;;) {

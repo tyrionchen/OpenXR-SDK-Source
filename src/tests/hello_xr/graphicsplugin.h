@@ -10,16 +10,20 @@ struct Cube {
 };
 
 // Wraps a graphics API so the main openxr program can be graphics API-independent.
+// 图形API接口封装，让openxr程序能拿个实现跨图形API的绘制逻辑
 struct IGraphicsPlugin {
     virtual ~IGraphicsPlugin() = default;
 
     // OpenXR extensions required by this graphics API.
+    // 获取OpenXR扩展需要的图形API
     virtual std::vector<std::string> GetInstanceExtensions() const = 0;
 
     // Create an instance of this graphics api for the provided instance and systemId.
+    // 图形接口初始化
     virtual void InitializeDevice(XrInstance instance, XrSystemId systemId) = 0;
 
     // Select the preferred swapchain format from the list of available formats.
+    // 从拿到的所有swap chain格式里面选择要使用的某一个
     virtual int64_t SelectColorSwapchainFormat(const std::vector<int64_t>& runtimeFormats) const = 0;
 
     // Get the graphics binding header for session creation.

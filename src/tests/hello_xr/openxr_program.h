@@ -8,6 +8,7 @@ struct IOpenXrProgram {
     virtual ~IOpenXrProgram() = default;
 
     // Create an Instance and other basic instance-level initialization.
+    // 创建并初始化实例
     virtual void CreateInstance() = 0;
 
     // Select a System for the view configuration specified in the Options and initialize the graphics device for the selected
@@ -19,6 +20,7 @@ struct IOpenXrProgram {
 
     // Create a Swapchain which requires coordinating with the graphics plugin to select the format, getting the system graphics
     // properties, getting the view configuration and grabbing the resulting swapchain images.
+    // 创建一个Swapchain, 它会和图像插件协调以选择格式、获取系统图形属性、获取view配置并获取生成的Swapchain图像
     virtual void CreateSwapchains() = 0;
 
     // Process any events in the event queue.
@@ -31,9 +33,11 @@ struct IOpenXrProgram {
     virtual bool IsSessionFocused() const = 0;
 
     // Sample input actions and generate haptic feedback.
+    // 采样输入动作并生成触觉反馈
     virtual void PollActions() = 0;
 
     // Create and submit a frame.
+    // 创建并提交一帧进行渲染
     virtual void RenderFrame() = 0;
 };
 
