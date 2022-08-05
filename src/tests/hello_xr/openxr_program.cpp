@@ -183,6 +183,8 @@ struct OpenXrProgram : IOpenXrProgram {
         // Create union of extensions required by platform and graphics plugins.
         std::vector<const char*> extensions;
 
+        m_graphicsPlugin->SetXrBaseInStructure(m_platformPlugin->GetInstanceCreateExtension());
+        
         // Transform platform and graphics extension std::strings to C strings.
         // 把std::strings表示的platform和graphics扩展转成c字符串
         const std::vector<std::string> platformExtensions = m_platformPlugin->GetInstanceExtensions();

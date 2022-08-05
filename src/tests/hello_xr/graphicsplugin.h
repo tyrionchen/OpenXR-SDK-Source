@@ -9,6 +9,8 @@ struct Cube {
     XrVector3f Scale;
 };
 
+#define UNUSED(x) x
+
 // Wraps a graphics API so the main openxr program can be graphics API-independent.
 // 图形API接口封装，让openxr程序能拿个实现跨图形API的绘制逻辑
 struct IGraphicsPlugin {
@@ -43,6 +45,10 @@ struct IGraphicsPlugin {
     // if supported by the graphics plugin. A supported value otherwise.
     virtual uint32_t GetSupportedSwapchainSampleCount(const XrViewConfigurationView& view) {
         return view.recommendedSwapchainSampleCount;
+    }
+
+    virtual void SetXrBaseInStructure(XrBaseInStructure* baseInStructure) {
+        UNUSED(baseInStructure);
     }
 };
 
