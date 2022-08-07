@@ -108,35 +108,151 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
       Log::Write(Log::Level::Info, Fmt("xxxxxxxxx AttachJava"));
       return jni;
   }
-  
+
+    jweak mesosClassLoader = NULL; // Initialized in JNI_OnLoad later in this file.
+
+    jclass FindMesosClass(JNIEnv* env, const char* className)
+    {
+        if (env->ExceptionCheck()) {
+            fprintf(stderr, "ERROR: exception pending on entry to "
+                            "FindMesosClass()\n");
+            return NULL;
+        }
+
+        if (mesosClassLoader == NULL) {
+            return env->FindClass(className);
+        }
+
+        // JNI FindClass uses class names with slashes, but
+        // ClassLoader.loadClass uses the dotted "binary name"
+        // format. Convert formats.
+        std::string convName = className;
+        for (int i = 0; i < convName.size(); i++) {
+            if (convName[i] == '/')
+                convName[i] = '.';
+        }
+
+        jclass javaLangClassLoader = env->FindClass("java/lang/ClassLoader");
+        assert(javaLangClassLoader != NULL);
+        jmethodID loadClass =
+                env->GetMethodID(javaLangClassLoader,
+                                 "loadClass",
+                                 "(Ljava/lang/String;)Ljava/lang/Class;");
+        assert(loadClass != NULL);
+
+        // Create an object for the class name string; alloc could fail.
+        jstring strClassName = env->NewStringUTF(convName.c_str());
+        if (env->ExceptionCheck()) {
+            fprintf(stderr, "ERROR: unable to convert '%s' to string\n",
+                    convName.c_str());
+            return NULL;
+        }
+
+        // Try to find the named class.
+        jclass cls = (jclass) env->CallObjectMethod(mesosClassLoader,
+                                                    loadClass,
+                                                    strClassName);
+
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            fprintf(stderr, "ERROR: unable to load class '%s' from %p\n",
+                    className, mesosClassLoader);
+            return NULL;
+        }
+
+        return cls;
+    }
+
+
+    jclass retrieveClass(JNIEnv *jni, ANativeActivity* activity,
+                         const char* className) {
+        jclass activityClass = jni->FindClass("android/app/NativeActivity");
+        jmethodID getClassLoader = jni->GetMethodID(activityClass, "getClassLoader",
+                                                    "()Ljava/lang/ClassLoader;");
+        jobject cls = jni->CallObjectMethod(activity->clazz, getClassLoader);
+        jclass classLoader = jni->FindClass("java/lang/ClassLoader");
+        jmethodID findClass = jni->GetMethodID(classLoader, "loadClass",
+                                               "(Ljava/lang/String;)Ljava/lang/Class;");
+        jstring strClassName = jni->NewStringUTF(className);
+        jclass classRetrieved = (jclass) jni->CallObjectMethod(cls, findClass,
+                                                               strClassName);
+        jni->DeleteLocalRef(strClassName);
+        return classRetrieved;
+    }
+    
     void SetXrBaseInStructure(XrBaseInStructure* baseInStructure) override {
         Log::Write(Log::Level::Info, Fmt("SetXrBaseInStructure baseInStructure:%p", baseInStructure));
 
         JavaVM *gJavaVM = ((JavaVM *)((XrInstanceCreateInfoAndroidKHR*)baseInStructure)->applicationVM);
+        m_context = ((XrInstanceCreateInfoAndroidKHR*)baseInStructure)->applicationActivity;
         
         m_jni = AttachJava(gJavaVM);
+
+//        m_jni->FindClass("java/lang/Thread");
+//        
+//        // Find thread's context class loader.
+//        jclass javaLangThread = m_jni->FindClass("java/lang/Thread");
+//        assert(javaLangThread != NULL);
+//
+//        jclass javaLangClassLoader = m_jni->FindClass("java/lang/ClassLoader");
+//        assert(javaLangClassLoader != NULL);
+//
+//        jmethodID currentThread = m_jni->GetStaticMethodID(
+//                javaLangThread, "currentThread", "()Ljava/lang/Thread;");
+//        assert(currentThread != NULL);
+//
+//        jmethodID getContextClassLoader = m_jni->GetMethodID(
+//                javaLangThread, "getContextClassLoader", "()Ljava/lang/ClassLoader;");
+//        assert(getContextClassLoader != NULL);
+//
+//        jobject thread = m_jni->CallStaticObjectMethod(javaLangThread, currentThread);
+//        assert(thread != NULL);
+//
+//        jobject classLoader = m_jni->CallObjectMethod(thread, getContextClassLoader);
+//
+//        if (classLoader != NULL) {
+//            mesosClassLoader = m_jni->NewWeakGlobalRef(classLoader);
+//        }
+
+//        jclass context_wrapper_clz = m_jni->FindClass("android/content/ContextWrapper");
+//        jmethodID getContextClassLoader = m_jni->GetMethodID(context_wrapper_clz, "getClassLoader", "()Ljava/lang/ClassLoader;");
+//        jobject classloader = m_jni->CallObjectMethod((jobject)m_context, getContextClassLoader);
+//        mesosClassLoader = m_jni->NewWeakGlobalRef(classloader);
+
+
+//        jclass media_texture_clz = FindMesosClass(m_jni, "com/khronos/hello_xr/MediaTexture");
+//        
+//        Log::Write(Log::Level::Info, Fmt("SetXrBaseInStructure classloader:%p media_texture_clz:%p", classloader, media_texture_clz));
         
-        jclass activity_clz = m_jni->FindClass("android/view/ContextThemeWrapper");
-        jmethodID activity_get_resource_method = m_jni->GetMethodID(activity_clz, "getResources", "()Landroid/content/res/Resources;");
-        jobject resource_obj = m_jni->CallObjectMethod((jobject)((XrInstanceCreateInfoAndroidKHR*)baseInStructure)->applicationActivity, activity_get_resource_method);
-        jclass resource_clz = m_jni->FindClass("android/content/res/Resources");
-        jmethodID resource_get_assert_method = m_jni->GetMethodID(resource_clz, "getAssets", "()Landroid/content/res/AssetManager;");
-        jobject asset_mgr_obj = m_jni->CallObjectMethod(resource_obj, resource_get_assert_method);
+        // Check that we are loading the correct version of the native library.
+//        jclass media_texture_clz = retrieveClass(m_jni, (ANativeActivity*)m_context, "com/khronos/hello_xr/MediaTexture");
+//        
+//        Log::Write(Log::Level::Info, Fmt("SetXrBaseInStructure 2 m_context:%p media_texture_clz:%p", m_context, media_texture_clz));
 
-
-        const char* filename = "demo_video.mp4";
-
-        off_t outStart, outLen;
-        int fd = AAsset_openFileDescriptor(AAssetManager_open(AAssetManager_fromJava(m_jni, asset_mgr_obj), filename, 0),
-                                           &outStart, &outLen);
-        if (fd < 0) {
-            Log::Write(Log::Level::Error, Fmt("failed to open file: %s %d (%s)", filename, fd, strerror(errno)));
-            return;
-        }
+//        jclass media_texture_clz = m_jni->FindClass("com/khronos/hello_xr/MediaTexture");
+//        Log::Write(Log::Level::Info, Fmt("SetXrBaseInStructure media_texture_clz:%p", media_texture_clz));
         
-        wd.fd = fd;
-        wd.outStart = outStart;
-        wd.outLen = outLen;
+//        jclass activity_clz = m_jni->FindClass("android/view/ContextThemeWrapper");
+//        jmethodID activity_get_resource_method = m_jni->GetMethodID(activity_clz, "getResources", "()Landroid/content/res/Resources;");
+//        jobject resource_obj = m_jni->CallObjectMethod((jobject)((XrInstanceCreateInfoAndroidKHR*)baseInStructure)->applicationActivity, activity_get_resource_method);
+//        jclass resource_clz = m_jni->FindClass("android/content/res/Resources");
+//        jmethodID resource_get_assert_method = m_jni->GetMethodID(resource_clz, "getAssets", "()Landroid/content/res/AssetManager;");
+//        jobject asset_mgr_obj = m_jni->CallObjectMethod(resource_obj, resource_get_assert_method);
+//
+//
+//        const char* filename = "demo_video.mp4";
+//
+//        off_t outStart, outLen;
+//        int fd = AAsset_openFileDescriptor(AAssetManager_open(AAssetManager_fromJava(m_jni, asset_mgr_obj), filename, 0),
+//                                           &outStart, &outLen);
+//        if (fd < 0) {
+//            Log::Write(Log::Level::Error, Fmt("failed to open file: %s %d (%s)", filename, fd, strerror(errno)));
+//            return;
+//        }
+        
+//        wd.fd = fd;
+//        wd.outStart = outStart;
+//        wd.outLen = outLen;
     }
   
     void InitializeDevice(XrInstance instance, XrSystemId systemId) override {
@@ -185,9 +301,28 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
             this);
 
         InitializeResources();
-        InitializeMedia();
+//        InitializeMedia();
+        InitMediaTexture(0);
     }
-
+    
+    void InitMediaTexture(int textureId) {
+        UNUSED(textureId);
+        
+        
+//        jclass media_texture_clz = m_jni->FindClass("com/khronos/hello_xr/MediaTexture");
+//        Log::Write(Log::Level::Info, Fmt("InitMediaTexture m_context:%p media_texture_clz:%p", m_context, media_texture_clz));
+//        jmethodID media_texture_constructor = m_jni->GetMethodID(media_texture_clz, "<init>", "(ILandroid/content/Context;)V");
+//        m_mediaTexture = m_jni->NewObject(media_texture_clz, media_texture_constructor, textureId, (jobject)m_context);
+//        m_media_texture_update_method = m_jni->GetMethodID(media_texture_clz, "updateTexture", "([F)V");
+//
+//        m_texture_matrix = m_jni->NewFloatArray(16);
+    }
+    
+    void updateTexture() {
+        m_jni->CallVoidMethod(m_mediaTexture, m_media_texture_update_method, m_texture_matrix);
+        jboolean val;
+        jfloat* matrix = m_jni->GetFloatArrayElements(m_texture_matrix, &val);
+    }
 
     typedef struct {
         int fd;
@@ -264,6 +399,17 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
     }
     
     void InitializeResources() {
+        // 屏幕缓冲有以下几种:
+        // 1.用于写入颜色值的 颜色缓冲
+        // 2.用于写入深度信息的 深度缓冲
+        // 3.允许基于一些条件丢弃指定片段的 模板缓冲
+        // 把这三种缓冲类型结合起来交帧缓冲Framebuffer
+        //
+        // 默认的渲染操作都在默认Framebuffer上
+        //
+        // 新创建的Framebuffer需要添加一些附件(Attachment)并且把它们添加到Framebuffer上
+        
+        // 创建一个帧缓冲对象
         glGenFramebuffers(1, &m_swapchainFramebuffer);
 
         GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -542,23 +688,23 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         CHECK(layerView.subImage.imageArrayIndex == 0);  // Texture arrays not supported.
         UNUSED_PARM(swapchainFormat);                    // Not used in this function for now.
 
-        char* yuvData = nullptr;
-        if (!wd.sawInputEOS || !wd.sawOutputEOS) {
-             // 应该是播完了
-           yuvData = doCodecWork(&wd);
-           if (yuvData != nullptr) {
-              Log::Write(Log::Level::Error, Fmt("InitializeMedia->RenderView yuvData:%p len:%zd", yuvData,
-                                                sizeof(yuvData)));
-
-              std::string str; 
-              for (int i = 0; i < sizeof yuvData; i++) {
-                  char tmp[3] = {0};
-                  sprintf(tmp, "%02x", yuvData[i]);
-                  str.append(tmp);
-              }
-             Log::Write(Log::Level::Error, Fmt("InitializeMedia->RenderView str:%s", str.c_str()));
-            }
-        }
+//        char* yuvData = nullptr;
+//        if (!wd.sawInputEOS || !wd.sawOutputEOS) {
+//             // 应该是播完了
+//           yuvData = doCodecWork(&wd);
+//           if (yuvData != nullptr) {
+//              Log::Write(Log::Level::Error, Fmt("InitializeMedia->RenderView yuvData:%p len:%zd", yuvData,
+//                                                sizeof(yuvData)));
+//
+//              std::string str; 
+//              for (int i = 0; i < sizeof yuvData; i++) {
+//                  char tmp[3] = {0};
+//                  sprintf(tmp, "%02x", yuvData[i]);
+//                  str.append(tmp);
+//              }
+//             Log::Write(Log::Level::Error, Fmt("InitializeMedia->RenderView str:%s", str.c_str()));
+//            }
+//        }
 
         
         glBindFramebuffer(GL_FRAMEBUFFER, m_swapchainFramebuffer);
@@ -577,6 +723,7 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
 
         const uint32_t depthTexture = GetDepthTexture(colorTexture);
 
+        // 当把纹理
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
 
@@ -643,6 +790,10 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
     const std::array<float, 4> m_clearColor;
 
     JNIEnv *m_jni;
+    void* m_context;
+    jobject m_mediaTexture;
+    jfloatArray m_texture_matrix;
+    jmethodID m_media_texture_update_method;
 };
 }  // namespace
 

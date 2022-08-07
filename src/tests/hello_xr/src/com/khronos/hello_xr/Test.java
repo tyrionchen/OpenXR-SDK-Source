@@ -1,25 +1,69 @@
-/*
- * Copyright (C) 2014 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.khronos.hello_xr;
 
+import android.content.Context;
+import android.graphics.SurfaceTexture;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.util.Log;
+import android.view.Surface;
 
-public class Test {
-    public static void test() {
-        Log.d("test","is ok to test cyyyyyy!");
+import java.io.IOException;
+
+public class Test implements MediaPlayer.OnVideoSizeChangedListener, SurfaceTexture.OnFrameAvailableListener {
+    private static final String TAG = "MediaTexture";
+    private boolean mUpdateSurface;
+
+    private final SurfaceTexture mSurfaceTexture;
+    private final float[] mSTMatrix = new float[16];
+    
+    // 读取视频流转换为图像纹理
+    public Test(int textureId, Context context) {
+        MediaPlayer mMediaPlayer = new MediaPlayer();
+        try {
+            mMediaPlayer.setDataSource(context.getAssets().openFd("demo_video.mp4"));
+        } catch (IOException e) {
+            Log.e(TAG, "setDataSource failed:" + e.getMessage());
+        }
+        mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+        mMediaPlayer.setLooping(true);
+        mMediaPlayer.setOnVideoSizeChangedListener(this);
+
+        mSurfaceTexture = new SurfaceTexture(textureId);
+        mSurfaceTexture.setOnFrameAvailableListener(this);
+
+        Surface surface = new Surface(mSurfaceTexture);
+        mMediaPlayer.setSurface(surface);
+        surface.release();
+
+        try {
+            mMediaPlayer.prepare();
+        } catch (Exception t) {
+            Log.e(TAG, "media player prepare failed");
+        }
+        mMediaPlayer.start();
+    }
+
+    @Override
+    public void onVideoSizeChanged(MediaPlayer mediaPlayer, int i, int i1) {
+        Log.i(TAG, String.format("onVideoSizeChanged[%d,%d]", i, i1));
+    }
+
+    @Override
+    public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+        Log.i(TAG, "onFrameAvailable");
+        synchronized (this) {
+            mUpdateSurface = true;
+        }
+    }
+    
+    public void updateTexture(float[] mtx) {
+        synchronized (this){
+            if (mUpdateSurface){
+                mSurfaceTexture.updateTexImage();
+                mSurfaceTexture.getTransformMatrix(mSTMatrix);
+                mUpdateSurface = false;
+            }
+        }
     }
 }
+
