@@ -414,7 +414,6 @@ endif()
 if(ANDROID)
     find_library(ANDROID_LIBRARY NAMES android)
     find_library(ANDROID_LOG_LIBRARY NAMES log)
-    find_library(ANDROID_MEDIA_LIBRARY NAMES mediandk)
 endif()
 
 if(BUILD_LOADER)

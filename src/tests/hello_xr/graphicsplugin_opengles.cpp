@@ -12,13 +12,8 @@
 
 #include "common/gfxwrapper_opengl.h"
 #include <common/xr_linear.h>
-#include "media/NdkMediaCodec.h"
-#include "media/NdkMediaExtractor.h"
 
 #include <jni.h>
-#include <android/asset_manager.h>
-#include <android/asset_manager_jni.h>
-#include "android_common.h"
 
 namespace {
 
@@ -128,29 +123,7 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
 
         JavaVM *gJavaVM = ((JavaVM *)((XrInstanceCreateInfoAndroidKHR*)baseInStructure)->applicationVM);
         m_context = ((XrInstanceCreateInfoAndroidKHR*)baseInStructure)->applicationActivity;
-        
         m_jni = AttachJava(gJavaVM);
-//        jclass activity_clz = m_jni->FindClass("android/view/ContextThemeWrapper");
-//        jmethodID activity_get_resource_method = m_jni->GetMethodID(activity_clz, "getResources", "()Landroid/content/res/Resources;");
-//        jobject resource_obj = m_jni->CallObjectMethod((jobject)((XrInstanceCreateInfoAndroidKHR*)baseInStructure)->applicationActivity, activity_get_resource_method);
-//        jclass resource_clz = m_jni->FindClass("android/content/res/Resources");
-//        jmethodID resource_get_assert_method = m_jni->GetMethodID(resource_clz, "getAssets", "()Landroid/content/res/AssetManager;");
-//        jobject asset_mgr_obj = m_jni->CallObjectMethod(resource_obj, resource_get_assert_method);
-//
-//
-//        const char* filename = "demo_video.mp4";
-//
-//        off_t outStart, outLen;
-//        int fd = AAsset_openFileDescriptor(AAssetManager_open(AAssetManager_fromJava(m_jni, asset_mgr_obj), filename, 0),
-//                                           &outStart, &outLen);
-//        if (fd < 0) {
-//            Log::Write(Log::Level::Error, Fmt("failed to open file: %s %d (%s)", filename, fd, strerror(errno)));
-//            return;
-//        }
-        
-//        wd.fd = fd;
-//        wd.outStart = outStart;
-//        wd.outLen = outLen;
     }
   
     void InitializeDevice(XrInstance instance, XrSystemId systemId) override {
@@ -224,80 +197,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         Log::Write(Log::Level::Error, Fmt("InitMediaTexture updateTexture matrix:[%s]", str.c_str()));
     }
 
-    typedef struct {
-        int fd;
-        int outStart;
-        int outLen;
-        
-        AMediaExtractor* ex;
-        AMediaCodec *codec;
-        int64_t renderStart;
-        bool sawInputEOS;
-        bool sawOutputEOS;
-        bool isPlaying;
-        bool renderOnce;
-    } workerdata;
-
-    workerdata wd = {-1, -1, -1, nullptr, nullptr, 0, false, false, false, false};
-
-
-    void InitializeMedia() {
-        if (wd.fd < 0) {
-            Log::Write(Log::Level::Error, Fmt("InitializeMedia-> failed wd.fd:%d", wd.fd));
-            return;
-        }
-        
-        workerdata *d = &wd;
-        
-        AMediaExtractor *ex = AMediaExtractor_new();
-        media_status_t err = AMediaExtractor_setDataSourceFd(ex, d->fd,
-                                                             static_cast<off64_t>(d->outStart),
-                                                             static_cast<off64_t>(d->outLen));
-        close(d->fd);
-        if (err != AMEDIA_OK) {
-            Log::Write(Log::Level::Error, Fmt("InitializeMedia-> setDataSource error: %d", err));
-            return;
-        }
-
-        int numtracks = AMediaExtractor_getTrackCount(ex);
-
-        AMediaCodec *codec = nullptr;
-
-        Log::Write(Log::Level::Info, Fmt("InitializeMedia->input has %d tracks", numtracks));
-        for (int i = 0; i < numtracks; i++) {
-            AMediaFormat *format = AMediaExtractor_getTrackFormat(ex, i);
-            const char *s = AMediaFormat_toString(format);
-            Log::Write(Log::Level::Info, Fmt("InitializeMedia->track %d format: %s", i, s));
-            const char *mime;
-            if (!AMediaFormat_getString(format, AMEDIAFORMAT_KEY_MIME, &mime)) {
-                Log::Write(Log::Level::Error, Fmt("InitializeMedia->no mime type"));
-                return ;
-            } else if (!strncmp(mime, "video/", 6)) {
-                // Omitting most error handling for clarity.
-                // Production code should check for errors.
-
-                // Subsequent calls to readSampleData(ByteBuffer, int), getSampleTrackIndex() and getSampleTime() only retrieve information for the subset of tracks selected.
-                // Selecting the same track multiple times has no effect, the track is only selected once.
-                AMediaExtractor_selectTrack(ex, i);
-                codec = AMediaCodec_createDecoderByType(mime);
-
-                // 第三个参数传入null表示不直接渲染上屏
-                AMediaCodec_configure(codec, format, nullptr, nullptr, 0);
-                d->ex = ex;
-                d->codec = codec;
-                d->renderStart = -1;
-                d->sawInputEOS = false;
-                d->sawOutputEOS = false;
-                d->isPlaying = false;
-                d->renderOnce = true;
-                // 开始解码
-                AMediaCodec_start(codec);
-            }
-            // 配置完需要把format还回去
-            AMediaFormat_delete(format);
-        }
-    }
-    
     void InitializeResources() {
         // 屏幕缓冲有以下几种:
         // 1.用于写入颜色值的 颜色缓冲
@@ -480,120 +379,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
     }
   }
 
-  int width = 1440;
-  int height = 720;
-  int sliceHeight = 720;
-  int stride = 1440;
-  
-  char* doCodecWork(workerdata *d) {
-      ssize_t bufidx = -1;
-      if (!d->sawInputEOS) {
-          // 获取可用input buffer索引
-          bufidx = AMediaCodec_dequeueInputBuffer(d->codec, 2000);
-          Log::Write(Log::Level::Error, Fmt("InitializeMedia->doCodecWork input buffer %zd", bufidx));
-          if (bufidx >= 0) {
-              size_t bufsize;
-              // 获取input buffer
-              auto buf = AMediaCodec_getInputBuffer(d->codec, bufidx, &bufsize);
-              // 读取未解码数据到input buffer
-              auto sampleSize = AMediaExtractor_readSampleData(d->ex, buf, bufsize);
-              // sampleSize小于0表示未解码数据读完了
-              if (sampleSize < 0) {
-                  sampleSize = 0;
-                  d->sawInputEOS = true;
-                  Log::Write(Log::Level::Error, "InitializeMedia->doCodecWork EOS");
-              }
-              // Returns the current sample's presentation time in microseconds
-              auto presentationTimeUs = AMediaExtractor_getSampleTime(d->ex);
-
-              // 塞一个buffer进去解码
-              AMediaCodec_queueInputBuffer(d->codec, bufidx, 0, sampleSize, presentationTimeUs,
-                                           d->sawInputEOS ? AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM : 0);
-              AMediaExtractor_advance(d->ex);
-          }
-      }
-
-      if (!d->sawOutputEOS) {
-          AMediaCodecBufferInfo info;
-          // 取解码后的数据
-          auto status = AMediaCodec_dequeueOutputBuffer(d->codec, &info, 0);
-          if (status >= 0) {
-              if (info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM) {
-                  Log::Write(Log::Level::Error, "InitializeMedia->doCodecWork output EOS");
-                  d->sawOutputEOS = true;
-              }
-              int64_t presentationNano = info.presentationTimeUs * 1000;
-              if (d->renderOnce < 0) {
-                  d->renderOnce = systemnanotime() - presentationNano;
-              }
-              int64_t delay = (d->renderStart + presentationNano) - systemnanotime();
-              if (delay > 0) {
-                  usleep(delay / 1000);
-              }
-              
-
-              size_t bufSize;
-              auto buf = AMediaCodec_getOutputBuffer(d->codec, status, &bufSize);
-              char* yuv = nullptr;
-              if (buf != nullptr) {
-                 size_t sizeYUV = width * height * 3 / 2;
-                 yuv = new char[sizeYUV + 4 * 3];
-                 *(int *)yuv = width;
-                 *(int *)(yuv + 4) = height;
-                 *(int *)(yuv + 8) = sizeYUV;
-                 
-                 char *dst = yuv + 4 * 3;
-                 uint8_t *src = buf + info.offset;
-                 memcpy(dst, src, width * height);
-                 src += sliceHeight * stride;
-                 dst += width * height;
-                 memcpy(dst, src, width * height / 2);
-
-                 char *yuvYv12 = new char[sizeYUV + 4 * 3];
-                 Log::Write(Log::Level::Info, Fmt("InitializeMedia->doCodecWork xxxxx sizeYUV:%zd sizeof:%zd", sizeYUV, sizeof(yuvYv12)));
-                 *(int *)yuvYv12 = width;
-                 *(int *)(yuvYv12 + 4) = height;
-                 *(int *)(yuvYv12 + 8) = sizeYUV;
-                 nv212Yv12(yuv + 4 * 3, yuvYv12 + 4 * 3, width, height);
-                 delete[] yuv;
-                 yuv = yuvYv12;
-                 // yuv就是我们的数据
-              }
-              
-              Log::Write(Log::Level::Info, Fmt("InitializeMedia->doCodecWork buf size:%zd", bufSize));
-              // 释放buffer， 由于前面配置了Surface，所以这里会直接渲染
-              AMediaCodec_releaseOutputBuffer(d->codec, status, info.size != 0);
-              if (d->renderOnce) {
-                  d->renderOnce = false;
-              }
-              return yuv;
-          } else if (status == AMEDIACODEC_INFO_OUTPUT_BUFFERS_CHANGED) {
-              Log::Write(Log::Level::Error, "InitializeMedia->doCodecWork output buffers changed");
-          } else if (status == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
-              auto format = AMediaCodec_getOutputFormat(d->codec);
-              Log::Write(Log::Level::Error, Fmt("InitializeMedia->doCodecWork format changed to: %s", AMediaFormat_toString(format)));
-              // mime: string(video/raw), 
-              // stride: int32(1440), 
-              // slice-height: int32(720),
-              // color-format: int32(21), 
-              // image-data: data, 
-              // crop: Rect(0, 0, 1439, 719), 
-              // hdr-static-info: data, width: 
-              // int32(1440), height: int32(720)}
-              AMediaFormat_delete(format);
-
-              // color-format的取值: MediaCodecInfo.COLOR_FormatYUV420SemiPlanar等
-            
-          } else if (status == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
-              Log::Write(Log::Level::Error, "InitializeMedia->doCodecWork no output buffer right now");
-          } else {
-              Log::Write(Log::Level::Error, Fmt("InitializeMedia->doCodecWork unexpected info code: %zd", status));
-          }
-      }
-      return nullptr;
-  }
-
-  
   void RenderView(const XrCompositionLayerProjectionView& layerView, const XrSwapchainImageBaseHeader* swapchainImage,
                     int64_t swapchainFormat, const std::vector<Cube>& cubes) override {
         CHECK(layerView.subImage.imageArrayIndex == 0);  // Texture arrays not supported.
@@ -601,24 +386,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
 
         updateTexture();
     
-//        char* yuvData = nullptr;
-//        if (!wd.sawInputEOS || !wd.sawOutputEOS) {
-//             // 应该是播完了
-//           yuvData = doCodecWork(&wd);
-//           if (yuvData != nullptr) {
-//              Log::Write(Log::Level::Error, Fmt("InitializeMedia->RenderView yuvData:%p len:%zd", yuvData,
-//                                                sizeof(yuvData)));
-//
-//              std::string str; 
-//              for (int i = 0; i < sizeof yuvData; i++) {
-//                  char tmp[3] = {0};
-//                  sprintf(tmp, "%02x", yuvData[i]);
-//                  str.append(tmp);
-//              }
-//             Log::Write(Log::Level::Error, Fmt("InitializeMedia->RenderView str:%s", str.c_str()));
-//            }
-//        }
-
         glBindFramebuffer(GL_FRAMEBUFFER, m_swapchainFramebuffer);
 
         const uint32_t colorTexture = reinterpret_cast<const XrSwapchainImageOpenGLESKHR*>(swapchainImage)->image;

@@ -30,7 +30,7 @@ if(ANDROID)
         ${LOCAL_HEADERS}
         ${VULKAN_SHADERS}
         $<TARGET_OBJECTS:android_native_app_glue>)
-    target_link_libraries(hello_xr ${ANDROID_LIBRARY} ${ANDROID_LOG_LIBRARY} ${ANDROID_MEDIA_LIBRARY})
+    target_link_libraries(hello_xr ${ANDROID_LIBRARY} ${ANDROID_LOG_LIBRARY})
 else()
     add_executable(hello_xr
         ${LOCAL_SOURCE}
