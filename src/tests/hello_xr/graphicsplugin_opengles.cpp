@@ -14,6 +14,7 @@
 #include <common/xr_linear.h>
 
 #include <jni.h>
+#include "android_common.h"
 
 namespace {
 
