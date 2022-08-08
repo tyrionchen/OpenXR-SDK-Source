@@ -188,6 +188,7 @@ static void app_handle_cmd(struct android_app* app, int32_t cmd) {
     }
 }
 
+#include "android_common.h"
 /**
  * This is the main entry point of a native application that is using
  * android_native_app_glue.  It runs in its own thread, with its own
@@ -199,20 +200,7 @@ void android_main(struct android_app* app) {
         app->activity->vm->AttachCurrentThread(&Env, nullptr);
         
 
-//        jobject nativeActivity = app->activity->clazz;
-//        jclass acl = Env->GetObjectClass(nativeActivity);
-//        jmethodID getClassLoader = Env->GetMethodID(acl, "getClassLoader", "()Ljava/lang/ClassLoader;");
-//        jobject cls = Env->CallObjectMethod(nativeActivity, getClassLoader);
-//        jclass classLoader = Env->FindClass("java/lang/ClassLoader");
-//        jmethodID findClass = Env->GetMethodID(classLoader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
-//        jstring strClassName = Env->NewStringUTF("com/khronos/hello_xr/Test");
-//        jclass media_texture_clz = (jclass)(Env->CallObjectMethod(cls, findClass, strClassName));
-//        Env->DeleteLocalRef(strClassName);
-
-//        jclass test2 = Env->FindClass("com/khronos/hello_xr/Test2");
-//        Log::Write(Log::Level::Info, Fmt("android_main Env:%p test2:%p", Env, test2));
-//        Log::Write(Log::Level::Info, Fmt("android_main Env:%p media_texture_clz:%p test2:%p", Env, media_texture_clz, test2));
-
+        g_activity = app->activity;
         AndroidAppState appState = {};
 
         app->userData = &appState;

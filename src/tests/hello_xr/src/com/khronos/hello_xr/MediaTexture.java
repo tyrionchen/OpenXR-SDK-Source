@@ -1,6 +1,7 @@
 package com.khronos.hello_xr;
 
 import android.content.Context;
+import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -9,7 +10,7 @@ import android.view.Surface;
 
 import java.io.IOException;
 
-public class Test implements MediaPlayer.OnVideoSizeChangedListener, SurfaceTexture.OnFrameAvailableListener {
+public class MediaTexture implements MediaPlayer.OnVideoSizeChangedListener, SurfaceTexture.OnFrameAvailableListener {
     private static final String TAG = "MediaTexture";
     private boolean mUpdateSurface;
 
@@ -17,7 +18,8 @@ public class Test implements MediaPlayer.OnVideoSizeChangedListener, SurfaceText
     private final float[] mSTMatrix = new float[16];
     
     // 读取视频流转换为图像纹理
-    public Test(int textureId, Context context) {
+    public MediaTexture(int textureId, Context context) {
+        Log.i(TAG, "MediaTexture() textureId:" + textureId);
         MediaPlayer mMediaPlayer = new MediaPlayer();
         try {
             mMediaPlayer.setDataSource(context.getAssets().openFd("demo_video.mp4"));
@@ -61,6 +63,7 @@ public class Test implements MediaPlayer.OnVideoSizeChangedListener, SurfaceText
             if (mUpdateSurface){
                 mSurfaceTexture.updateTexImage();
                 mSurfaceTexture.getTransformMatrix(mSTMatrix);
+                System.arraycopy(mSTMatrix, 0, mtx, 0, 16);
                 mUpdateSurface = false;
             }
         }

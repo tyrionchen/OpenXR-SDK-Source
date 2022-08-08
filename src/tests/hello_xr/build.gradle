@@ -62,6 +62,7 @@ android {
             res.srcDir 'android_resources/vulkan'
         }
         OpenGLES {
+            java.srcDirs = ['src']
             res.srcDir 'android_resources/opengles'
         }
     }
