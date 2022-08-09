@@ -20,28 +20,29 @@ namespace {
 
 // The version statement has come on first line.
 static const char* VertexShaderGlsl = R"_(#version 320 es
+    in vec3 aPosition;
+    in vec3 aTexCoord;
 
-    in vec3 VertexPos;
-    in vec3 VertexColor;
-
-    out vec3 PSVertexColor;
-
-    uniform mat4 ModelViewProjection;
+    out vec3 vTexCoord;
 
     void main() {
-       gl_Position = ModelViewProjection * vec4(VertexPos, 1.0);
-       PSVertexColor = VertexColor;
+       vTexCoord = aTexCoord;
+       gl_Position = vec4(aPosition, 1.0);
     }
     )_";
 
 // The version statement has come on first line.
 static const char* FragmentShaderGlsl = R"_(#version 320 es
+    #extension GL_OES_EGL_image_external_essl3 : require
+    precision mediump float;
 
-    in lowp vec3 PSVertexColor;
-    out lowp vec4 FragColor;
+    in vec3 vTexCoord;
+    out vec4 FragColor;
+
+    uniform samplerExternalOES sTexture;
 
     void main() {
-       FragColor = vec4(PSVertexColor, 1);
+       FragColor=texture(sTexture, vTexCoord.xy);
     }
     )_";
 
@@ -174,7 +175,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
 
         InitializeResources();
 //        InitializeMedia();
-        InitMediaTexture(0);
     }
     
     void InitMediaTexture(int textureId) {
@@ -188,14 +188,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
 
     void updateTexture() {
         m_jni->CallVoidMethod(m_mediaTexture, m_media_texture_update_method, m_texture_matrix);
-        jfloat* matrix = m_jni->GetFloatArrayElements(m_texture_matrix, 0);
-        jsize matrixSize = m_jni->GetArrayLength(m_texture_matrix);
-        std::string str;
-        for (int i = 0; i < matrixSize; ++i) {
-            str += std::to_string(matrix[i]);
-        }
-      
-        Log::Write(Log::Level::Error, Fmt("InitMediaTexture updateTexture matrix:[%s]", str.c_str()));
     }
 
     void InitializeResources() {
@@ -211,14 +203,16 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         
         // 创建一个帧缓冲对象
         glGenFramebuffers(1, &m_swapchainFramebuffer);
-
         // 顶点着色器
+        Log::Write(Log::Level::Info, Fmt("InitializeResources vertexShader"));
         GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertexShader, 1, &VertexShaderGlsl, nullptr);
         glCompileShader(vertexShader);
+        
         CheckShader(vertexShader);
 
         // 像素着色器
+        Log::Write(Log::Level::Info, Fmt("InitializeResources fragmentShader"));
         GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragmentShader, 1, &FragmentShaderGlsl, nullptr);
         glCompileShader(fragmentShader);
@@ -233,35 +227,35 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
 
-        // 着色器里的投影矩阵
-        m_modelViewProjectionUniformLocation = glGetUniformLocation(m_program, "ModelViewProjection");
+        // 顶点
+        m_vertexPosition = glGetAttribLocation(m_program, "aPosition");
+        // 纹理
+        m_texturePosition = glGetAttribLocation(m_program, "aTexCoord");
 
-        // 顶点着色器里的顶点
-        m_vertexAttribCoords = glGetAttribLocation(m_program, "VertexPos");
-        // 着色器里的颜色
-        m_vertexAttribColor = glGetAttribLocation(m_program, "VertexColor");
+        m_texture_sampler = glGetUniformLocation(m_program, "sTexture");
+      
+//         顶点数据
+        glGenBuffers(1, &m_rectVertexBuffer);
+        glBindBuffer(GL_ARRAY_BUFFER, m_rectVertexBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Geometry::c_cyyVertices), Geometry::c_cyyVertices, GL_STATIC_DRAW);
 
-        
-        glGenBuffers(1, &m_cubeVertexBuffer);
-        // 绑定到 顶点数组缓冲
-        glBindBuffer(GL_ARRAY_BUFFER, m_cubeVertexBuffer);
-        // 分配并且填充内存
-        glBufferData(GL_ARRAY_BUFFER, sizeof(Geometry::c_cubeVertices), Geometry::c_cubeVertices, GL_STATIC_DRAW);
-
-        glGenBuffers(1, &m_cubeIndexBuffer);
+        glGenBuffers(1, &m_rectIndecesBuffer);
         // 绑定到 索引缓冲
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_cubeIndexBuffer);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Geometry::c_cubeIndices), Geometry::c_cubeIndices, GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_rectIndecesBuffer);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Geometry::c_cyyIndces), Geometry::c_cyyIndces, GL_STATIC_DRAW);
 
         glGenVertexArrays(1, &m_vao);
         glBindVertexArray(m_vao);
-        glEnableVertexAttribArray(m_vertexAttribCoords);
-        glEnableVertexAttribArray(m_vertexAttribColor);
-        glBindBuffer(GL_ARRAY_BUFFER, m_cubeVertexBuffer);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_cubeIndexBuffer);
-        // 描述顶点属性
-        glVertexAttribPointer(m_vertexAttribCoords, 3, GL_FLOAT, GL_FALSE, sizeof(Geometry::Vertex), nullptr);
-        glVertexAttribPointer(m_vertexAttribColor, 3, GL_FLOAT, GL_FALSE, sizeof(Geometry::Vertex), reinterpret_cast<const void*>(sizeof(XrVector3f)));
+
+        // 启用顶点
+        glEnableVertexAttribArray(m_vertexPosition);
+        glEnableVertexAttribArray(m_texturePosition);
+        glBindBuffer(GL_ARRAY_BUFFER, m_rectVertexBuffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_rectIndecesBuffer);
+
+        // 指定顶点属性
+        glVertexAttribPointer(m_vertexPosition, 3, GL_FLOAT, GL_FALSE, sizeof(XrVector3f), nullptr);
+        glVertexAttribPointer(m_texturePosition, 3, GL_FLOAT, GL_FALSE, sizeof(XrVector3f), reinterpret_cast<const void*>(sizeof(XrVector3f)));
     }
 
     void CheckShader(GLuint shader) {
@@ -326,36 +320,16 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         return swapchainImageBase;
     }
 
-    uint32_t GetDepthTexture(uint32_t colorTexture) {
-        // If a depth-stencil view has already been created for this back-buffer, use it.
-        auto depthBufferIt = m_colorToDepthMap.find(colorTexture);
-        if (depthBufferIt != m_colorToDepthMap.end()) {
-            return depthBufferIt->second;
-        }
-
-        // This back-buffer has no corresponding depth-stencil texture, so create one with matching dimensions.
-
-        GLint width;
-        GLint height;
-        // 将一个纹理对象绑定到纹理目标GL_TEXTURE_2D上
-        glBindTexture(GL_TEXTURE_2D, colorTexture);
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
-
-        uint32_t depthTexture;
-        // 生成一个新的纹理
-        glGenTextures(1, &depthTexture);
-        glBindTexture(GL_TEXTURE_2D, depthTexture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
-
-        m_colorToDepthMap.insert(std::make_pair(colorTexture, depthTexture));
-
-        return depthTexture;
+    void generateMyTexture() {
+      // 生成一个新的纹理
+      glGenTextures(1, &m_texture_id);
+      glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_texture_id);
+      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     }
+    
 
   int64_t systemnanotime() {
       timespec now;
@@ -363,50 +337,40 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
       return now.tv_sec * 1000000000LL + now.tv_nsec;
   }
 
-  void nv212Yv12(char *nv21, char *yv12, int width, int height)
-  {
-    int frameSize = width * height;
-    memcpy(yv12, nv21, frameSize);
-    nv21 += frameSize;
-    yv12 += frameSize;
-    int halfWidth = width / 2;
-    int halfHeight = height / 2;
-    int quadFrame = halfWidth * halfHeight;
-    for (int i = 0; i < halfHeight; i++) {
-      for (int j = 0; j < halfWidth; j++) {
-        *(yv12 + i * halfWidth + j) = *nv21++;
-        *(yv12 + quadFrame + i * halfWidth + j) = *nv21++;
-      }
-    }
-  }
-
   void RenderView(const XrCompositionLayerProjectionView& layerView, const XrSwapchainImageBaseHeader* swapchainImage,
                     int64_t swapchainFormat, const std::vector<Cube>& cubes) override {
         CHECK(layerView.subImage.imageArrayIndex == 0);  // Texture arrays not supported.
         UNUSED_PARM(swapchainFormat);                    // Not used in this function for now.
-
-        updateTexture();
+        UNUSED(cubes);
     
         glBindFramebuffer(GL_FRAMEBUFFER, m_swapchainFramebuffer);
 
         const uint32_t colorTexture = reinterpret_cast<const XrSwapchainImageOpenGLESKHR*>(swapchainImage)->image;
-        Log::Write(Log::Level::Info, Fmt("InitializeMedia->RenderView colorTexture:%d", colorTexture));
         glViewport(static_cast<GLint>(layerView.subImage.imageRect.offset.x),
                    static_cast<GLint>(layerView.subImage.imageRect.offset.y),
                    static_cast<GLsizei>(layerView.subImage.imageRect.extent.width),
                    static_cast<GLsizei>(layerView.subImage.imageRect.extent.height));
-
+//        Log::Write(Log::Level::Info, Fmt("InitializeMedia->RenderView viewport(%d,%d)[%d,%d]"
+//              ,layerView.subImage.imageRect.offset.x
+//              ,layerView.subImage.imageRect.offset.y,
+//                                     layerView.subImage.imageRect.extent.width,
+//                                     layerView.subImage.imageRect.extent.height));
+    
         glFrontFace(GL_CW);
         glCullFace(GL_BACK);
         glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
 
-        // 深度纹理
-        const uint32_t depthTexture = GetDepthTexture(colorTexture);
-
-        // 当把纹理
+        // 当把纹理添加到帧缓冲的时候, 所有的渲染操作会直接写到纹理colorTexture里面
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
+
+        if (m_texture_id == 0) {
+            generateMyTexture();
+            InitMediaTexture(m_texture_id);
+            Log::Write(Log::Level::Info, Fmt("InitializeMedia->generate and init my texture:%d", m_texture_id));
+        }
+
+        updateTexture();
 
         // Clear swapchain and depth buffer.
         glClearColor(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
@@ -416,32 +380,13 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         // Set shaders and uniform variables.
         glUseProgram(m_program);
 
-        const auto& pose = layerView.pose;
-        XrMatrix4x4f proj;
-        XrMatrix4x4f_CreateProjectionFov(&proj, GRAPHICS_OPENGL_ES, layerView.fov, 0.05f, 100.0f);
-        XrMatrix4x4f toView;
-        XrVector3f scale{1.f, 1.f, 1.f};
-        XrMatrix4x4f_CreateTranslationRotationScale(&toView, &pose.position, &pose.orientation, &scale);
-        XrMatrix4x4f view;
-        XrMatrix4x4f_InvertRigidBody(&view, &toView);
-        XrMatrix4x4f vp;
-        XrMatrix4x4f_Multiply(&vp, &proj, &view);
-
         // Set cube primitive data.
         glBindVertexArray(m_vao);
 
-        // Render each cube
-        for (const Cube& cube : cubes) {
-            // Compute the model-view-projection transform and set it..
-            XrMatrix4x4f model;
-            XrMatrix4x4f_CreateTranslationRotationScale(&model, &cube.Pose.position, &cube.Pose.orientation, &cube.Scale);
-            XrMatrix4x4f mvp;
-            XrMatrix4x4f_Multiply(&mvp, &vp, &model);
-            glUniformMatrix4fv(m_modelViewProjectionUniformLocation, 1, GL_FALSE, reinterpret_cast<const GLfloat*>(&mvp));
-
-            // Draw the cube.
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(ArraySize(Geometry::c_cubeIndices)), GL_UNSIGNED_SHORT, nullptr);
-        }
+        glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_texture_id);
+        glUniform1i(m_texture_sampler, 0);
+    
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(ArraySize(Geometry::c_cyyIndces)), GL_UNSIGNED_SHORT, nullptr);
 
         glBindVertexArray(0);
         glUseProgram(0);
@@ -458,9 +403,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
     std::list<std::vector<XrSwapchainImageOpenGLESKHR>> m_swapchainImageBuffers;
     GLuint m_swapchainFramebuffer{0};
     GLuint m_program{0};
-    GLint m_modelViewProjectionUniformLocation{0};
-    GLint m_vertexAttribCoords{0};
-    GLint m_vertexAttribColor{0};
     GLuint m_vao{0};
     GLuint m_cubeVertexBuffer{0};
     GLuint m_cubeIndexBuffer{0};
@@ -476,6 +418,13 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
     jobject m_mediaTexture;
     jfloatArray m_texture_matrix;
     jmethodID m_media_texture_update_method;
+
+    GLint m_vertexPosition{0};
+    GLint m_texturePosition{0};
+    GLint m_texture_sampler{0};
+    GLuint m_rectVertexBuffer{0};
+    GLuint m_rectIndecesBuffer{0};
+    GLuint m_texture_id{0};
 };
 }  // namespace
 
