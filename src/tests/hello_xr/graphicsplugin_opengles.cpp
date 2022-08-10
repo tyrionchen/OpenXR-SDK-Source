@@ -254,8 +254,8 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_rectIndecesBuffer);
 
         // 指定顶点属性
-        glVertexAttribPointer(m_vertexPosition, 3, GL_FLOAT, GL_FALSE, sizeof(XrVector3f), nullptr);
-        glVertexAttribPointer(m_texturePosition, 3, GL_FLOAT, GL_FALSE, sizeof(XrVector3f), reinterpret_cast<const void*>(sizeof(XrVector3f)));
+        glVertexAttribPointer(m_vertexPosition, 3, GL_FLOAT, GL_FALSE, sizeof(XrVector3f)*2, nullptr);
+        glVertexAttribPointer(m_texturePosition, 3, GL_FLOAT, GL_FALSE, sizeof(XrVector3f)*2, reinterpret_cast<const void*>(sizeof(XrVector3f)));
     }
 
     void CheckShader(GLuint shader) {
@@ -356,10 +356,10 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
 //                                     layerView.subImage.imageRect.extent.width,
 //                                     layerView.subImage.imageRect.extent.height));
     
-        glFrontFace(GL_CW);
-        glCullFace(GL_BACK);
-        glEnable(GL_CULL_FACE);
-        glEnable(GL_DEPTH_TEST);
+//        glFrontFace(GL_CW);
+//        glCullFace(GL_BACK);
+//        glEnable(GL_CULL_FACE);
+//        glEnable(GL_DEPTH_TEST);
 
         // 当把纹理添加到帧缓冲的时候, 所有的渲染操作会直接写到纹理colorTexture里面
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
