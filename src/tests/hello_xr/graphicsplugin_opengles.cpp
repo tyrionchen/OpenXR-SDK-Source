@@ -174,7 +174,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
             this);
 
         InitializeResources();
-//        InitializeMedia();
     }
     
     void InitMediaTexture(int textureId) {
@@ -184,10 +183,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         m_mediaTexture = m_jni->NewObject(media_texture_clz, media_texture_constructor, textureId, (jobject)m_context);
         m_media_texture_update_method = m_jni->GetMethodID(media_texture_clz, "updateTexture", "([F)V");
         m_texture_matrix = m_jni->NewFloatArray(16);
-    }
-
-    void updateTexture() {
-        m_jni->CallVoidMethod(m_mediaTexture, m_media_texture_update_method, m_texture_matrix);
     }
 
     void InitializeResources() {
@@ -227,33 +222,29 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
 
-        // 顶点
+        // 顶点坐标
         m_vertexPosition = glGetAttribLocation(m_program, "aPosition");
-        // 纹理
+        // 纹理坐标
         m_texturePosition = glGetAttribLocation(m_program, "aTexCoord");
-
+        // 纹理采样器
         m_texture_sampler = glGetUniformLocation(m_program, "sTexture");
-      
-//         顶点数据
-        glGenBuffers(1, &m_rectVertexBuffer);
-        glBindBuffer(GL_ARRAY_BUFFER, m_rectVertexBuffer);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(Geometry::c_cyyVertices), Geometry::c_cyyVertices, GL_STATIC_DRAW);
-
-        glGenBuffers(1, &m_rectIndecesBuffer);
-        // 绑定到 索引缓冲
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_rectIndecesBuffer);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Geometry::c_cyyIndces), Geometry::c_cyyIndces, GL_STATIC_DRAW);
 
         glGenVertexArrays(1, &m_vao);
         glBindVertexArray(m_vao);
-
-        // 启用顶点
-        glEnableVertexAttribArray(m_vertexPosition);
-        glEnableVertexAttribArray(m_texturePosition);
+        
+        // 顶点数据
+        glGenBuffers(1, &m_rectVertexBuffer);
         glBindBuffer(GL_ARRAY_BUFFER, m_rectVertexBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Geometry::c_2dPlayer_vertices), Geometry::c_2dPlayer_vertices, GL_STATIC_DRAW);
+
+        // 索引数据
+        glGenBuffers(1, &m_rectIndecesBuffer);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_rectIndecesBuffer);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Geometry::c_2dPlayerIndices), Geometry::c_2dPlayerIndices, GL_STATIC_DRAW);
 
         // 指定顶点属性
+        glEnableVertexAttribArray(m_vertexPosition);
+        glEnableVertexAttribArray(m_texturePosition);
         glVertexAttribPointer(m_vertexPosition, 3, GL_FLOAT, GL_FALSE, sizeof(XrVector3f)*2, nullptr);
         glVertexAttribPointer(m_texturePosition, 3, GL_FLOAT, GL_FALSE, sizeof(XrVector3f)*2, reinterpret_cast<const void*>(sizeof(XrVector3f)));
     }
@@ -320,16 +311,6 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         return swapchainImageBase;
     }
 
-    void generateMyTexture() {
-      // 生成一个新的纹理
-      glGenTextures(1, &m_texture_id);
-      glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_texture_id);
-      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-      glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    }
-    
 
   int64_t systemnanotime() {
       timespec now;
@@ -365,12 +346,19 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
 
         if (m_texture_id == 0) {
-            generateMyTexture();
+            // 准备一个接收播放器Image Stream的纹理
+            glGenTextures(1, &m_texture_id);
+            glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_texture_id);
+            glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+          
             InitMediaTexture(m_texture_id);
-            Log::Write(Log::Level::Info, Fmt("InitializeMedia->generate and init my texture:%d", m_texture_id));
         }
-
-        updateTexture();
+    
+        // 更新纹理
+        m_jni->CallVoidMethod(m_mediaTexture, m_media_texture_update_method, m_texture_matrix);
 
         // Clear swapchain and depth buffer.
         glClearColor(m_clearColor[0], m_clearColor[1], m_clearColor[2], m_clearColor[3]);
@@ -386,7 +374,7 @@ struct OpenGLESGraphicsPlugin : public IGraphicsPlugin {
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_texture_id);
         glUniform1i(m_texture_sampler, 0);
     
-        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(ArraySize(Geometry::c_cyyIndces)), GL_UNSIGNED_SHORT, nullptr);
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(ArraySize(Geometry::c_2dPlayerIndices)), GL_UNSIGNED_SHORT, nullptr);
 
         glBindVertexArray(0);
         glUseProgram(0);

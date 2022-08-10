@@ -55,30 +55,15 @@ constexpr unsigned short c_cubeIndices[] = {
     30, 31, 32, 33, 34, 35,  // +Z
 };
 
-//// 图形顶点        纹理顶点
-//constexpr XrVector3f c_cyyVertices[] = {
-//    {1, -1, 0}, {1, 0, 0},
-//    {-1, -1, 0}, {0, 0, 0},
-//    {1, 1, 0}, {1, 1, 0},
-//    {-1, 1, 0}, {0, 1, 0}
-//};
-//
-//constexpr unsigned short c_cyyIndces[] = {
-//    0, 1, 2, 
-//    3, 4, 5, 
-//    6, 7, 8,
-//    9,10,11
-//};
-
 // 图形顶点        纹理顶点
-constexpr XrVector3f c_cyyVertices[] = {
+constexpr XrVector3f c_2dPlayer_vertices[] = {
     {1, 1, 0,}, {1, 0, 0},
     {-1, 1, 0}, {0, 0, 0},
     {-1, -1, 0}, {0, 1, 0},
     {1, -1, 0}, {1, 1, 0}
 };
 
-constexpr unsigned short c_cyyIndces[] = {
+constexpr unsigned short c_2dPlayerIndices[] = {
     3,0,1,3,2,1,3
 };
 
