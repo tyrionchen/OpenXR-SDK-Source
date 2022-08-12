@@ -9,7 +9,7 @@ struct Cube {
     XrVector3f Scale;
 };
 
-#define UNUSED(x) x
+#include "common.h"
 
 // Wraps a graphics API so the main openxr program can be graphics API-independent.
 // 图形API接口封装，让openxr程序能拿个实现跨图形API的绘制逻辑
@@ -48,7 +48,10 @@ struct IGraphicsPlugin {
     }
 
     virtual void SetXrBaseInStructure(XrBaseInStructure* baseInStructure) {
-        UNUSED(baseInStructure);
+        Log::Write(Log::Level::Info, Fmt("SetXrBaseInStructure:%p", baseInStructure));
+    }
+    virtual void SetPos(XrPosef* baseInStructure) {
+      Log::Write(Log::Level::Info, Fmt("SetPosSetPos:%p", baseInStructure));
     }
 };
 

@@ -933,6 +933,8 @@ struct OpenXrProgram : IOpenXrProgram {
             }
         }
 
+        m_graphicsPlugin->SetPos(&cubes[0].Pose);
+        
         // Render a 10cm cube scaled by grabAction for each hand. Note renderHand will only be
         // true when the application has focus.
         for (auto hand : {Side::LEFT, Side::RIGHT}) {
