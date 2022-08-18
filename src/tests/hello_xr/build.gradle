@@ -44,10 +44,10 @@ android {
                 arguments '-DANDROID_STL=c++_shared',
                         '-DBUILD_API_LAYERS=OFF',
                         '-DBUILD_TESTS=ON',
-                        '-DBUILD_LOADER=ON',
+                        '-DBUILD_LOADER=OFF',
                         '-DBUILD_CONFORMANCE_TESTS=OFF',
                         '-DBUILD_ALL_EXTENSIONS=ON'
-                targets "openxr_loader", "hello_xr"
+                targets "hello_xr"
             }
         }
     }
